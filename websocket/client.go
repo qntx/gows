@@ -873,3 +873,150 @@ func OnRetry(fn func(uint, uint, error, *Client)) Option {
 		return nil
 	}
 }
+
+// --------------------------------------------------------------------------------
+// Chaining Methods
+
+// Proxy configures the proxy using a URL string or custom function and returns the Client for chaining.
+func (c *Client) Proxy(proxy any) *Client {
+	c.With(WithProxy(proxy))
+	return c
+}
+
+// EnvProxy enables proxy settings from environment variables and returns the Client for chaining.
+func (c *Client) EnvProxy() *Client {
+	c.With(WithEnvProxy())
+	return c
+}
+
+// TLS sets the TLS configuration for secure connections and returns the Client for chaining.
+func (c *Client) TLS(cfg *tls.Config) *Client {
+	c.With(WithTLS(cfg))
+	return c
+}
+
+// Timeout sets the timeout for connection handshakes and write operations and returns the Client for chaining.
+func (c *Client) Timeout(timeout time.Duration) *Client {
+	c.With(WithTimeout(timeout))
+	return c
+}
+
+// Buffers configures the read and write buffer sizes in bytes and returns the Client for chaining.
+func (c *Client) Buffers(read, write int) *Client {
+	c.With(WithBuffers(read, write))
+	return c
+}
+
+// Subprotocols specifies supported WebSocket subprotocols and returns the Client for chaining.
+func (c *Client) Subprotocols(protos ...string) *Client {
+	c.With(WithSubprotocols(protos...))
+	return c
+}
+
+// Compression enables or disables RFC 7692 per-message compression and returns the Client for chaining.
+func (c *Client) Compression(enable bool) *Client {
+	c.With(WithCompression(enable))
+	return c
+}
+
+// ReadLimit sets the maximum allowed message size in bytes and returns the Client for chaining.
+func (c *Client) ReadLimit(limit int64) *Client {
+	c.With(WithReadLimit(limit))
+	return c
+}
+
+// Retries configures reconnection behavior with attempt count and backoff timing and returns the Client for chaining.
+func (c *Client) Retries(count uint, wait, maxWait time.Duration) *Client {
+	c.With(WithRetries(count, wait, maxWait))
+	return c
+}
+
+// KeepAlive enables periodic ping messages with a custom interval and payload and returns the Client for chaining.
+func (c *Client) KeepAlive(interval time.Duration, msg []byte) *Client {
+	c.With(WithKeepAlive(interval, msg))
+	return c
+}
+
+// Async enables asynchronous execution of callbacks and returns the Client for chaining.
+func (c *Client) Async(enable bool) *Client {
+	c.With(WithAsync(enable))
+	return c
+}
+
+// Header adds a single key-value pair to the handshake headers and returns the Client for chaining.
+func (c *Client) Header(key, value string) *Client {
+	c.With(WithHeader(key, value))
+	return c
+}
+
+// Headers applies multiple headers to the handshake from a map and returns the Client for chaining.
+func (c *Client) Headers(headers map[string]string) *Client {
+	c.With(WithHeaders(headers))
+	return c
+}
+
+// SetMessages enables a buffered channel for receiving messages and returns the Client for chaining.
+func (c *Client) SetMessages(capacity int) *Client {
+	c.With(WithMessages(capacity))
+	return c
+}
+
+// SetErrors enables a buffered channel for error reporting and returns the Client for chaining.
+func (c *Client) SetErrors(capacity int) *Client {
+	c.With(WithErrors(capacity))
+	return c
+}
+
+// SetContext replaces the default lifecycle context with a custom one and returns the Client for chaining.
+func (c *Client) SetContext(ctx context.Context) *Client {
+	c.With(WithContext(ctx))
+	return c
+}
+
+// OnConnect registers a callback for successful connection and returns the Client for chaining.
+func (c *Client) OnConnect(fn func(*Client)) *Client {
+	c.With(OnConnect(fn))
+	return c
+}
+
+// OnText registers a callback for incoming text messages and returns the Client for chaining.
+func (c *Client) OnText(fn func([]byte, *Client)) *Client {
+	c.With(OnText(fn))
+	return c
+}
+
+// OnBinary registers a callback for incoming binary messages and returns the Client for chaining.
+func (c *Client) OnBinary(fn func([]byte, *Client)) *Client {
+	c.With(OnBinary(fn))
+	return c
+}
+
+// OnPing registers a callback for received ping messages and returns the Client for chaining.
+func (c *Client) OnPing(fn func(string, *Client)) *Client {
+	c.With(OnPing(fn))
+	return c
+}
+
+// OnPong registers a callback for received pong messages and returns the Client for chaining.
+func (c *Client) OnPong(fn func(string, *Client)) *Client {
+	c.With(OnPong(fn))
+	return c
+}
+
+// OnClose registers a callback for connection closure and returns the Client for chaining.
+func (c *Client) OnClose(fn func(int, string, *Client)) *Client {
+	c.With(OnClose(fn))
+	return c
+}
+
+// OnError registers a callback for error handling and returns the Client for chaining.
+func (c *Client) OnError(fn func(error, *Client)) *Client {
+	c.With(OnError(fn))
+	return c
+}
+
+// OnRetry registers a callback for reconnection attempts and returns the Client for chaining.
+func (c *Client) OnRetry(fn func(uint, uint, error, *Client)) *Client {
+	c.With(OnRetry(fn))
+	return c
+}
