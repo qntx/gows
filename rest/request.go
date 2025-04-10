@@ -608,3 +608,96 @@ func WithContext(ctx context.Context) RequestOption {
 		return nil
 	}
 }
+
+// --------------------------------------------------------------------------------
+// Chaining Methods
+
+// Method sets the HTTP method for the request and returns the Request for chaining.
+func (r *Request) Method(method string) *Request {
+	r.With(WithMethod(method))
+	return r
+}
+
+// URL sets the request URL path and returns the Request for chaining.
+func (r *Request) URL(url string) *Request {
+	r.With(WithURL(url))
+	return r
+}
+
+// Header adds a single header key-value pair and returns the Request for chaining.
+func (r *Request) Header(key, value string) *Request {
+	r.With(WithHeader(key, value))
+	return r
+}
+
+// Headers adds multiple headers from a map and returns the Request for chaining.
+func (r *Request) Headers(headers map[string]string) *Request {
+	r.With(WithHeaders(headers))
+	return r
+}
+
+// Query adds a single query parameter and returns the Request for chaining.
+func (r *Request) Query(key, value string) *Request {
+	r.With(WithQuery(key, value))
+	return r
+}
+
+// Queries adds multiple query parameters from a map and returns the Request for chaining.
+func (r *Request) Queries(params map[string]string) *Request {
+	r.With(WithQueries(params))
+	return r
+}
+
+// Body sets the request body to be marshaled as JSON and returns the Request for chaining.
+func (r *Request) Body(body any) *Request {
+	r.With(WithBody(body))
+	return r
+}
+
+// Form sets form data for the request and returns the Request for chaining.
+func (r *Request) Form(data map[string]any) *Request {
+	r.With(WithForm(data))
+	return r
+}
+
+// File adds a file using a file path and returns the Request for chaining.
+func (r *Request) File(name, path string) *Request {
+	r.With(WithFile(name, path))
+	return r
+}
+
+// Files adds multiple files from a map and returns the Request for chaining.
+func (r *Request) Files(files map[string]string) *Request {
+	r.With(WithFiles(files))
+	return r
+}
+
+// FileReader adds a file using an io.Reader and returns the Request for chaining.
+func (r *Request) FileReader(name, filename string, reader io.Reader) *Request {
+	r.With(WithFileReader(name, filename, reader))
+	return r
+}
+
+// Result sets the target for unmarshaling a successful response and returns the Request for chaining.
+func (r *Request) Result(result any) *Request {
+	r.With(WithResult(result))
+	return r
+}
+
+// Error sets the target for unmarshaling an error response and returns the Request for chaining.
+func (r *Request) Error(err any) *Request {
+	r.With(WithError(err))
+	return r
+}
+
+// Retries configures retry settings and returns the Request for chaining.
+func (r *Request) Retries(count uint, waitTime, maxWaitTime time.Duration) *Request {
+	r.With(WithRequestRetries(count, waitTime, maxWaitTime))
+	return r
+}
+
+// Context sets the context for the request and returns the Request for chaining.
+func (r *Request) Context(ctx context.Context) *Request {
+	r.With(WithContext(ctx))
+	return r
+}

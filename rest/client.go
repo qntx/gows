@@ -232,6 +232,45 @@ func WithRetries(count uint, waitTime, maxWaitTime time.Duration) Option {
 }
 
 // --------------------------------------------------------------------------------
+// Chaining Methods
+
+// BaseURL sets the base URL for the Client and returns the Client for chaining.
+func (c *Client) BaseURL(baseURL string) *Client {
+	c.With(WithBaseURL(baseURL))
+	return c
+}
+
+// Debug enables or disables debug mode and returns the Client for chaining.
+func (c *Client) Debug(debug bool) *Client {
+	c.With(WithDebug(debug))
+	return c
+}
+
+// Timeout sets the HTTP request timeout and returns the Client for chaining.
+func (c *Client) Timeout(timeout time.Duration) *Client {
+	c.With(WithTimeout(timeout))
+	return c
+}
+
+// Proxy configures the Client to use a specified proxy URL and returns the Client for chaining.
+func (c *Client) Proxy(proxyURL string) *Client {
+	c.With(WithProxy(proxyURL))
+	return c
+}
+
+// EnvProxy configures the Client to use proxy settings from the environment and returns the Client for chaining.
+func (c *Client) EnvProxy() *Client {
+	c.With(WithEnvProxy())
+	return c
+}
+
+// Retries configures retry settings and returns the Client for chaining.
+func (c *Client) Retries(count uint, waitTime, maxWaitTime time.Duration) *Client {
+	c.With(WithRetries(count, waitTime, maxWaitTime))
+	return c
+}
+
+// --------------------------------------------------------------------------------
 // Private Helpers
 
 // setTransportProxy configures the HTTP transport with a proxy function.
