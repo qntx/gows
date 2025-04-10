@@ -174,10 +174,6 @@ func (r *Request) execute(method, url string) (*Response, error) {
 		r.attempt++
 
 		if err == nil && (resp == nil || resp.StatusCode() < http.StatusInternalServerError) {
-			if r.client.debug {
-				r.client.logger.Debug("request succeeded with status: %d", resp.StatusCode())
-			}
-
 			return resp, nil
 		}
 

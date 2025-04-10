@@ -183,11 +183,7 @@ func (r *Response) readBody() error {
 		return nil
 	}
 
-	defer func() {
-		if err := r.rawResponse.Body.Close(); err != nil {
-			r.request.client.logger.Error("failed to close response body: %v", err)
-		}
-	}()
+	defer r.rawResponse.Body.Close()
 
 	body, err := io.ReadAll(r.rawResponse.Body)
 	if err != nil {

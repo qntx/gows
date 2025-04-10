@@ -10,12 +10,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/qntx/gonet/logger"
 	"github.com/qntx/gonet/util"
 )
 
@@ -63,10 +61,9 @@ type Config struct {
 //
 // It is safe for concurrent use when sending messages or accessing state.
 type Client struct {
-	config          Config           // Client configuration settings.
-	url             string           // WebSocket server endpoint (e.g., ws://example.com).
-	header          http.Header      // HTTP headers for the connection handshake.
-	logger          logger.Interface // Logger instance for operational logging.
+	config          Config      // Client configuration settings.
+	url             string      // WebSocket server endpoint (e.g., ws://example.com).
+	header          http.Header // HTTP headers for the connection handshake.
 	conn            *websocket.Conn
 	dialer          *websocket.Dialer
 	connected       bool
@@ -97,11 +94,6 @@ type Client struct {
 // It returns the client and an error if any option fails to apply.
 // The client is not connected until Connect() is called.
 func New(endpoint string, opts ...Option) (*Client, error) {
-	l, err := logger.New("info", os.Stdout)
-	if err != nil {
-		return nil, err
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Client{
 		config: Config{
@@ -114,7 +106,6 @@ func New(endpoint string, opts ...Option) (*Client, error) {
 		},
 		url:         endpoint,
 		header:      make(http.Header),
-		logger:      l,
 		reconnectCh: make(chan struct{}, 1),
 		ctx:         ctx,
 		cancel:      cancel,
@@ -165,14 +156,8 @@ func (c *Client) Connect() error {
 		EnableCompression: c.config.EnableCompression,
 	}
 
-	conn, resp, err := c.dialer.DialContext(c.ctx, c.url, c.header)
+	conn, _, err := c.dialer.DialContext(c.ctx, c.url, c.header)
 	if err != nil {
-		c.logger.Error("Connect failed: %v", err)
-
-		if resp != nil {
-			c.logger.Error("HTTP response: %d %s", resp.StatusCode, resp.Status)
-		}
-
 		return fmt.Errorf("dial failed: %w", err)
 	}
 
@@ -180,8 +165,6 @@ func (c *Client) Connect() error {
 	c.connected = true
 	conn.SetReadLimit(c.config.ReadLimit)
 	c.setupHandlers()
-
-	c.logger.Info("Connected to %s", c.url)
 
 	if c.onConnected != nil {
 		c.invoke(func() { c.onConnected(c) })
@@ -254,10 +237,6 @@ func (c *Client) HasErrors() bool {
 //
 // Logs a warning if the channel is not configured.
 func (c *Client) Messages() <-chan []byte {
-	if c.messagesCh == nil {
-		c.logger.Warn("Messages channel not enabled; use WithMessages")
-	}
-
 	return c.messagesCh
 }
 
@@ -265,10 +244,6 @@ func (c *Client) Messages() <-chan []byte {
 //
 // Logs a warning if the channel is not configured.
 func (c *Client) Errors() <-chan error {
-	if c.errorsCh == nil {
-		c.logger.Warn("Errors channel not enabled; use WithErrors")
-	}
-
 	return c.errorsCh
 }
 
@@ -280,11 +255,7 @@ func (c *Client) Errors() <-chan error {
 // It runs until the context is cancelled or an unrecoverable error occurs.
 func (c *Client) run() {
 	defer c.wg.Done()
-	defer func() {
-		if err := c.shutdown(); err != nil {
-			c.logger.Error("Shutdown error: %v", err)
-		}
-	}()
+	defer c.shutdown()
 
 	if c.config.KeepAlive {
 		c.wg.Add(1)
@@ -298,8 +269,6 @@ func (c *Client) run() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			c.logger.Info("Shutting down: %v", c.ctx.Err())
-
 			return
 		case <-c.reconnectCh:
 			c.reconnect()
@@ -314,8 +283,6 @@ func (c *Client) run() {
 // setupHandlers configures WebSocket event handlers for ping, pong, and close events.
 func (c *Client) setupHandlers() {
 	c.conn.SetPingHandler(func(data string) error {
-		c.logger.Debug("Ping received: %s", data)
-
 		if c.onPingReceived != nil {
 			c.invoke(func() { c.onPingReceived(data, c) })
 		}
@@ -324,8 +291,6 @@ func (c *Client) setupHandlers() {
 	})
 
 	c.conn.SetPongHandler(func(data string) error {
-		c.logger.Debug("Pong received: %s", data)
-
 		if c.onPongReceived != nil {
 			c.invoke(func() { c.onPongReceived(data, c) })
 		}
@@ -334,8 +299,6 @@ func (c *Client) setupHandlers() {
 	})
 
 	c.conn.SetCloseHandler(func(code int, text string) error {
-		c.logger.Info("Connection closed: %d - %s", code, text)
-
 		if c.onClosed != nil {
 			c.invoke(func() { c.onClosed(code, text, c) })
 		}
@@ -375,7 +338,6 @@ func (c *Client) reconnect() {
 
 	for i := range c.config.RetryCount {
 		attemptNumber := i + 1
-		c.logger.Info("Reconnecting attempt [%d/%d]", attemptNumber, c.config.RetryCount)
 
 		err := c.Connect()
 
@@ -388,13 +350,10 @@ func (c *Client) reconnect() {
 		}
 
 		if err := util.Wait(c.ctx, i+1, c.config.RetryWaitTime, c.config.RetryMaxWaitTime, util.DefaultJitterFactor); err != nil {
-			c.logger.Error("Reconnection wait cancelled: %v", err)
-
 			return
 		}
 	}
 
-	c.logger.Error("Reconnection failed after %d attempts", c.config.RetryCount)
 	c.cancel()
 }
 
@@ -414,11 +373,10 @@ func (c *Client) shutdown() error {
 	if c.conn != nil {
 		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
 		if err := c.conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-			c.logger.Error("Failed to send close message: %v", err)
+			return fmt.Errorf("failed to send close message: %w", err)
 		}
 
 		if err := c.conn.Close(); err != nil {
-			c.logger.Error("Failed to close connection: %v", err)
 
 			return fmt.Errorf("connection close failed: %w", err)
 		}
@@ -465,7 +423,6 @@ func (c *Client) read() error {
 	}
 
 	c.sendMessage(data)
-	c.logger.Debug("Received message [type=%d, size=%d]", msgType, len(data))
 
 	switch msgType {
 	case websocket.TextMessage:
@@ -537,7 +494,6 @@ func (c *Client) connection() *websocket.Conn {
 //
 // It sends the error to the errors channel if configured.
 func (c *Client) handleError(err error) {
-	c.logger.Error("Error: %v", err)
 	c.sendError(err)
 
 	// Call error callback if configured
@@ -585,7 +541,6 @@ func (c *Client) sendMessage(data []byte) {
 	case <-c.ctx.Done():
 	case <-time.After(c.config.Timeout):
 		c.sendError(errors.New("message dropped: channel full or timeout"))
-		c.logger.Warn("Message dropped: channel full or timeout after %v", c.config.Timeout)
 	}
 }
 
@@ -600,7 +555,6 @@ func (c *Client) sendError(err error) {
 	case c.errorsCh <- err:
 	case <-c.ctx.Done():
 	case <-time.After(c.config.Timeout):
-		c.logger.Warn("Error dropped: channel full or timeout after %v", c.config.Timeout)
 	}
 }
 
@@ -725,13 +679,10 @@ func WithReadLimit(limit int64) Option {
 func WithRetries(count uint, wait, maxWait time.Duration) Option {
 	return func(c *Client) error {
 		if wait < 0 {
-			c.logger.Warn("retry wait time must be non-negative, using default")
-
 			wait = DefaultRetryWait
 		}
 
 		if maxWait < 0 {
-			c.logger.Warn("retry max wait time must be non-negative, using default")
 
 			maxWait = DefaultRetryMaxWait
 		}
@@ -765,21 +716,6 @@ func WithKeepAlive(interval time.Duration, msg []byte) Option {
 func WithAsync(enable bool) Option {
 	return func(c *Client) error {
 		c.config.AsyncCallbacks = enable
-
-		return nil
-	}
-}
-
-// WithLogger sets a custom logger for the client.
-//
-// Returns an error if the logger is nil.
-func WithLogger(l logger.Interface) Option {
-	return func(c *Client) error {
-		if l == nil {
-			return errors.New("logger cannot be nil")
-		}
-
-		c.logger = l
 
 		return nil
 	}
