@@ -42,6 +42,26 @@ var (
 )
 
 // --------------------------------------------------------------------------------
+// HTTP Method Constants
+
+const (
+	// MethodGet represents the HTTP GET method
+	MethodGet = "GET"
+	// MethodPost represents the HTTP POST method
+	MethodPost = "POST"
+	// MethodPut represents the HTTP PUT method
+	MethodPut = "PUT"
+	// MethodPatch represents the HTTP PATCH method
+	MethodPatch = "PATCH"
+	// MethodDelete represents the HTTP DELETE method
+	MethodDelete = "DELETE"
+	// MethodHead represents the HTTP HEAD method
+	MethodHead = "HEAD"
+	// MethodOptions represents the HTTP OPTIONS method
+	MethodOptions = "OPTIONS"
+)
+
+// --------------------------------------------------------------------------------
 // Types
 
 // Request represents an HTTP request with configurable settings.
@@ -112,28 +132,28 @@ func (r *Request) With(opts ...RequestOption) (*Request, error) {
 //
 // It sets the method to GET and sends the request immediately.
 func (r *Request) Get(url string) (*Response, error) {
-	return r.execute(http.MethodGet, url)
+	return r.execute(MethodGet, url)
 }
 
 // Post executes a POST request with the specified URL.
 //
 // It sets the method to POST and sends the request immediately.
 func (r *Request) Post(url string) (*Response, error) {
-	return r.execute(http.MethodPost, url)
+	return r.execute(MethodPost, url)
 }
 
 // Put executes a PUT request with the specified URL.
 //
 // It sets the method to PUT and sends the request immediately.
 func (r *Request) Put(url string) (*Response, error) {
-	return r.execute(http.MethodPut, url)
+	return r.execute(MethodPut, url)
 }
 
 // Delete executes a DELETE request with the specified URL.
 //
 // It sets the method to DELETE and sends the request immediately.
 func (r *Request) Delete(url string) (*Response, error) {
-	return r.execute(http.MethodDelete, url)
+	return r.execute(MethodDelete, url)
 }
 
 // Execute sends the configured HTTP request and returns the response.

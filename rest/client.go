@@ -133,11 +133,7 @@ func (c *Client) R(opts ...RequestOption) (*Request, error) {
 		ctx:              context.Background(),
 	}
 
-	for _, opt := range opts {
-		if err := opt(r); err != nil {
-			return nil, fmt.Errorf("failed to apply request option: %w", err)
-		}
-	}
+	r.With(opts...)
 
 	return r, nil
 }
