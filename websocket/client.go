@@ -55,6 +55,7 @@ type Config struct {
 	PingInterval      time.Duration                         // Interval between ping messages.
 	PingMessage       []byte                                // Custom ping payload; must be short to avoid overhead.
 	AsyncCallbacks    bool                                  // Runs callbacks asynchronously if true; use with caution in high-throughput scenarios.
+	Debug             bool                                  // Enables debug logging of WebSocket messages and events.
 }
 
 // Client manages a WebSocket connection with configurable behavior and event-driven hooks.
@@ -156,8 +157,15 @@ func (c *Client) Connect() error {
 		EnableCompression: c.config.EnableCompression,
 	}
 
+	if c.config.Debug {
+		PrintConnectMessage()
+	}
+
 	conn, _, err := c.dialer.DialContext(c.ctx, c.url, c.header)
 	if err != nil {
+		if c.config.Debug {
+			PrintErrorMessage(fmt.Errorf("dial failed: %w", err))
+		}
 		return fmt.Errorf("dial failed: %w", err)
 	}
 
@@ -287,6 +295,10 @@ func (c *Client) setupHandlers() {
 			c.invoke(func() { c.onPingReceived(data, c) })
 		}
 
+		if c.config.Debug {
+			PrintPingMessage([]byte(data), "Received from server")
+		}
+
 		return c.sendPong([]byte(data))
 	})
 
@@ -295,12 +307,20 @@ func (c *Client) setupHandlers() {
 			c.invoke(func() { c.onPongReceived(data, c) })
 		}
 
+		if c.config.Debug {
+			PrintPongMessage([]byte(data), "Received from server")
+		}
+
 		return nil
 	})
 
 	c.conn.SetCloseHandler(func(code int, text string) error {
 		if c.onClosed != nil {
 			c.invoke(func() { c.onClosed(code, text, c) })
+		}
+
+		if c.config.Debug {
+			PrintCloseMessage(code, text)
 		}
 
 		return nil
@@ -320,6 +340,10 @@ func (c *Client) keepAlive() {
 			return
 		case <-ticker.C:
 			if c.Connected() {
+				if c.config.Debug {
+					PrintPingMessage(c.config.PingMessage, "Sending keep-alive ping")
+				}
+
 				if err := c.sendPing(c.config.PingMessage); err != nil {
 					c.handleError(fmt.Errorf("keep-alive ping failed: %w", err))
 
@@ -343,6 +367,10 @@ func (c *Client) reconnect() {
 
 		if c.onRetry != nil {
 			c.invoke(func() { c.onRetry(attemptNumber, c.config.RetryCount, err, c) })
+		}
+
+		if c.config.Debug && err != nil {
+			PrintRetryMessage(attemptNumber, c.config.RetryCount, err)
 		}
 
 		if err == nil {
@@ -372,12 +400,16 @@ func (c *Client) shutdown() error {
 
 	if c.conn != nil {
 		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+
+		if c.config.Debug {
+			PrintCloseMessage(websocket.CloseNormalClosure, "Normal closure")
+		}
+
 		if err := c.conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
 			return fmt.Errorf("failed to send close message: %w", err)
 		}
 
 		if err := c.conn.Close(); err != nil {
-
 			return fmt.Errorf("connection close failed: %w", err)
 		}
 
@@ -424,6 +456,15 @@ func (c *Client) read() error {
 
 	c.sendMessage(data)
 
+	if c.config.Debug {
+		switch msgType {
+		case websocket.TextMessage:
+			PrintTextMessage(data, "Received from server")
+		case websocket.BinaryMessage:
+			PrintBinaryMessage(data, "Received from server")
+		}
+	}
+
 	switch msgType {
 	case websocket.TextMessage:
 		if c.onTextMessage != nil {
@@ -460,6 +501,15 @@ func (c *Client) send(msgType int, data []byte) error {
 		return err
 	}
 
+	if c.config.Debug {
+		switch msgType {
+		case websocket.TextMessage:
+			PrintTextMessage(data, "Sent to server")
+		case websocket.BinaryMessage:
+			PrintBinaryMessage(data, "Sent to server")
+		}
+	}
+
 	return nil
 }
 
@@ -494,6 +544,10 @@ func (c *Client) connection() *websocket.Conn {
 //
 // It sends the error to the errors channel if configured.
 func (c *Client) handleError(err error) {
+	if c.config.Debug {
+		PrintErrorMessage(err)
+	}
+
 	c.sendError(err)
 
 	// Call error callback if configured
@@ -896,6 +950,14 @@ func OnRetry(fn func(uint, uint, error, *Client)) Option {
 	}
 }
 
+// WithDebug enables or disables debug logging of WebSocket messages and events.
+func WithDebug(enable bool) Option {
+	return func(c *Client) error {
+		c.config.Debug = enable
+		return nil
+	}
+}
+
 // --------------------------------------------------------------------------------
 // Chaining Methods
 
@@ -1040,5 +1102,11 @@ func (c *Client) OnError(fn func(error, *Client)) *Client {
 // OnRetry registers a callback for reconnection attempts and returns the Client for chaining.
 func (c *Client) OnRetry(fn func(uint, uint, error, *Client)) *Client {
 	c.With(OnRetry(fn))
+	return c
+}
+
+// Debug enables or disables debug logging and returns the Client for chaining.
+func (c *Client) Debug(enable bool) *Client {
+	c.With(WithDebug(enable))
 	return c
 }

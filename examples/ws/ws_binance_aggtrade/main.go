@@ -33,6 +33,7 @@ func main() {
 		websocket.OnClose(func(code int, text string, c *websocket.Client) {
 			fmt.Println("Connection closed", "code", code, "reason", text)
 		}),
+		websocket.WithDebug(true),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create WebSocket client: %v\n", err)
