@@ -3,7 +3,7 @@ module github.com/qntx/gonet
 go 1.24.1
 
 require (
-	github.com/bytedance/sonic v1.13.2
+	github.com/bytedance/sonic v1.13.3
 	github.com/fatih/color v1.18.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
