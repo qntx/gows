@@ -6,6 +6,7 @@ package coder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,25 +17,23 @@ import (
 	"github.com/qntx/gows"
 )
 
-const (
-	DefaultTimeout = 30 * time.Second
-)
-
 var (
-	ErrNotConnected     = fmt.Errorf("websocket client is not connected")
-	ErrAlreadyConnected = fmt.Errorf("websocket client is already connected")
+	ErrNotConnected     = errors.New("websocket client is not connected")
+	ErrAlreadyConnected = errors.New("websocket client is already connected")
 )
 
 // Config holds the configuration for the client.
 type Config struct {
+	Context     context.Context
 	URL         string
-	Timeout     time.Duration
 	Heartbeat   time.Duration
 	ReadLimit   int64
 	DialOptions *websocket.DialOptions
 
-	OnConnect    func()
-	OnDisconnect func(err error)
+	OnConnect func(ctx context.Context, client gows.Client, httpResp *http.Response, err error)
+	OnRead    func(ctx context.Context, client gows.Client, typ gows.MessageType, p []byte, err error)
+	OnWrite   func(ctx context.Context, client gows.Client, typ gows.MessageType, p []byte, err error)
+	OnClose   func(ctx context.Context, client gows.Client, err error)
 }
 
 var _ gows.Client = (*Client)(nil)
@@ -55,8 +54,11 @@ type Client struct {
 
 // New creates a new WebSocket client.
 func New(cfg Config) *Client {
-	if cfg.Timeout == 0 {
-		cfg.Timeout = DefaultTimeout
+	if cfg.URL == "" {
+		panic("URL is required")
+	}
+	if cfg.Context == nil {
+		cfg.Context = context.Background()
 	}
 
 	return &Client{
@@ -73,10 +75,7 @@ func (c *Client) Connect(ctx context.Context) error {
 		return ErrAlreadyConnected
 	}
 
-	dialCtx, dialCancel := context.WithTimeout(ctx, c.cfg.Timeout)
-	defer dialCancel()
-
-	conn, httpResp, err := websocket.Dial(dialCtx, c.cfg.URL, c.cfg.DialOptions)
+	conn, httpResp, err := websocket.Dial(ctx, c.cfg.URL, c.cfg.DialOptions)
 	if err != nil {
 		return fmt.Errorf("failed to dial websocket: %w", err)
 	}
@@ -85,7 +84,7 @@ func (c *Client) Connect(ctx context.Context) error {
 		conn.SetReadLimit(c.cfg.ReadLimit)
 	}
 
-	c.ctx, c.cancel = context.WithCancel(context.Background())
+	c.ctx, c.cancel = context.WithCancel(c.cfg.Context)
 	c.conn = conn
 	c.httpResp = httpResp
 	c.isConnected = true
@@ -95,7 +94,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	if c.cfg.OnConnect != nil {
-		c.cfg.OnConnect()
+		c.cfg.OnConnect(c.ctx, c, httpResp, err)
 	}
 	return nil
 }
@@ -119,8 +118,8 @@ func (c *Client) Close() error {
 	err := c.conn.Close(websocket.StatusNormalClosure, "closing connection")
 	c.conn = nil
 
-	if c.cfg.OnDisconnect != nil {
-		c.cfg.OnDisconnect(err)
+	if c.cfg.OnClose != nil {
+		c.cfg.OnClose(c.ctx, c, err)
 	}
 	return err
 }
@@ -144,13 +143,17 @@ func (c *Client) Read(ctx context.Context, v any) (gows.MessageType, []byte, err
 			return 0, nil, err
 		}
 	}
+
+	if c.cfg.OnRead != nil {
+		c.cfg.OnRead(c.ctx, c, gows.MessageType(typ), p, err)
+	}
 	return gows.MessageType(typ), p, nil
 }
 
 // Reader returns a streaming reader for the next message.
 // This is useful for very large messages that shouldn't be loaded into memory at once.
 // IMPORTANT: Your application should have only ONE goroutine calling Reader.
-func (c *Client) Reader(ctx context.Context, v any) (gows.MessageType, io.Reader, error) {
+func (c *Client) Reader(ctx context.Context) (gows.MessageType, io.Reader, error) {
 	conn, err := c.getConn()
 	if err != nil {
 		return 0, nil, err
@@ -161,10 +164,8 @@ func (c *Client) Reader(ctx context.Context, v any) (gows.MessageType, io.Reader
 		return 0, nil, err
 	}
 
-	if v != nil {
-		if err := json.NewDecoder(r).Decode(v); err != nil {
-			return 0, nil, err
-		}
+	if c.cfg.OnRead != nil {
+		c.cfg.OnRead(c.ctx, c, gows.MessageType(typ), nil, err)
 	}
 	return gows.MessageType(typ), r, nil
 }
@@ -176,6 +177,9 @@ func (c *Client) Write(ctx context.Context, typ gows.MessageType, p []byte) erro
 		return err
 	}
 
+	if c.cfg.OnWrite != nil {
+		c.cfg.OnWrite(c.ctx, c, gows.MessageType(typ), p, err)
+	}
 	return conn.Write(ctx, websocket.MessageType(typ), p)
 }
 
@@ -186,7 +190,25 @@ func (c *Client) Writer(ctx context.Context, typ gows.MessageType) (io.WriteClos
 		return nil, err
 	}
 
-	return conn.Writer(ctx, websocket.MessageType(typ))
+	w, err := conn.Writer(ctx, websocket.MessageType(typ))
+	if err != nil {
+		return nil, err
+	}
+
+	if c.cfg.OnWrite != nil {
+		c.cfg.OnWrite(c.ctx, c, gows.MessageType(typ), nil, err)
+	}
+	return w, nil
+}
+
+// HandshakeResponse returns the HTTP response from the initial WebSocket handshake.
+// It can be useful for inspecting headers, cookies, or the status code.
+// The response is nil if the client has not connected yet.
+func (c *Client) HandshakeResponse() *http.Response {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.httpResp
 }
 
 // getConn safely retrieves the current connection object.
@@ -201,16 +223,6 @@ func (c *Client) getConn() (*websocket.Conn, error) {
 	return c.conn, nil
 }
 
-// HandshakeResponse returns the HTTP response from the initial WebSocket handshake.
-// It can be useful for inspecting headers, cookies, or the status code.
-// The response is nil if the client has not connected yet.
-func (c *Client) HandshakeResponse() *http.Response {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	return c.httpResp
-}
-
 // heartbeat sends periodic pings to keep the connection alive.
 func (c *Client) heartbeat(ctx context.Context) {
 	t := time.NewTicker(c.cfg.Heartbeat)
@@ -221,9 +233,13 @@ func (c *Client) heartbeat(ctx context.Context) {
 		case <-ctx.Done(): // This context is cancelled by c.Close()
 			return
 		case <-t.C:
-			pingCtx, cancel := context.WithTimeout(ctx, c.cfg.Timeout)
-			c.conn.Ping(pingCtx)
-			cancel()
 		}
+
+		err := c.conn.Ping(ctx)
+		if err != nil {
+			return
+		}
+
+		t.Reset(c.cfg.Heartbeat)
 	}
 }

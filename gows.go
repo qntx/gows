@@ -21,6 +21,6 @@ type Client interface {
 	Read(ctx context.Context, v any) (MessageType, []byte, error)
 	Write(ctx context.Context, typ MessageType, p []byte) error
 
-	Reader(ctx context.Context, v any) (MessageType, io.Reader, error)
+	Reader(ctx context.Context) (MessageType, io.Reader, error)
 	Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error)
 }
