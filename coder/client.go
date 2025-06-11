@@ -5,7 +5,6 @@ package coder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
 	"github.com/qntx/gows"
 )
@@ -29,11 +29,6 @@ type Config struct {
 	Heartbeat   time.Duration
 	ReadLimit   int64
 	DialOptions *websocket.DialOptions
-
-	OnConnect func(ctx context.Context, client gows.Client, httpResp *http.Response, err error)
-	OnRead    func(ctx context.Context, client gows.Client, typ gows.MessageType, p []byte, err error)
-	OnWrite   func(ctx context.Context, client gows.Client, typ gows.MessageType, p []byte, err error)
-	OnClose   func(ctx context.Context, client gows.Client, err error)
 }
 
 var _ gows.Client = (*Client)(nil)
@@ -93,9 +88,6 @@ func (c *Client) Connect(ctx context.Context) error {
 		go c.heartbeat(c.ctx)
 	}
 
-	if c.cfg.OnConnect != nil {
-		c.cfg.OnConnect(c.ctx, c, httpResp, err)
-	}
 	return nil
 }
 
@@ -118,9 +110,6 @@ func (c *Client) Close() error {
 	err := c.conn.Close(websocket.StatusNormalClosure, "closing connection")
 	c.conn = nil
 
-	if c.cfg.OnClose != nil {
-		c.cfg.OnClose(c.ctx, c, err)
-	}
 	return err
 }
 
@@ -144,9 +133,6 @@ func (c *Client) Read(ctx context.Context, v any) (gows.MessageType, []byte, err
 		}
 	}
 
-	if c.cfg.OnRead != nil {
-		c.cfg.OnRead(c.ctx, c, gows.MessageType(typ), p, err)
-	}
 	return gows.MessageType(typ), p, nil
 }
 
@@ -164,9 +150,6 @@ func (c *Client) Reader(ctx context.Context) (gows.MessageType, io.Reader, error
 		return 0, nil, err
 	}
 
-	if c.cfg.OnRead != nil {
-		c.cfg.OnRead(c.ctx, c, gows.MessageType(typ), nil, err)
-	}
 	return gows.MessageType(typ), r, nil
 }
 
@@ -177,9 +160,6 @@ func (c *Client) Write(ctx context.Context, typ gows.MessageType, p []byte) erro
 		return err
 	}
 
-	if c.cfg.OnWrite != nil {
-		c.cfg.OnWrite(c.ctx, c, gows.MessageType(typ), p, err)
-	}
 	return conn.Write(ctx, websocket.MessageType(typ), p)
 }
 
@@ -195,9 +175,6 @@ func (c *Client) Writer(ctx context.Context, typ gows.MessageType) (io.WriteClos
 		return nil, err
 	}
 
-	if c.cfg.OnWrite != nil {
-		c.cfg.OnWrite(c.ctx, c, gows.MessageType(typ), nil, err)
-	}
 	return w, nil
 }
 

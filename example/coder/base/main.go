@@ -7,10 +7,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/qntx/gows"
 	"github.com/qntx/gows/coder"
 )
 
-type BinanceTrade struct {
+type Trade struct {
 	EventType string `json:"e"`
 	EventTime int64  `json:"E"`
 	Symbol    string `json:"s"`
@@ -19,57 +20,61 @@ type BinanceTrade struct {
 	Quantity  string `json:"q"`
 	TradeTime int64  `json:"T"`
 	IsMaker   bool   `json:"m"`
+	Ignore    bool   `json:"M"`
 }
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	binanceURL := "wss://stream.binance.com:9443/ws/btcusdt@trade"
-
 	client := coder.New(coder.Config{
-		Context:   ctx,
-		URL:       binanceURL,
-		Heartbeat: 3 * time.Minute,
-		ReadLimit: 1024 * 1024,
+		Context: ctx,
+		URL:     "wss://stream.binance.com:9443/ws/btcusdt@trade",
 	})
 
-	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	if err := client.Connect(connectCtx); err != nil {
+	if err := client.Connect(c); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	log.Println("Successfully connected to Binance trade stream.")
 
-	go func() {
-		for {
-			var trade BinanceTrade
-			if _, _, err := client.Read(ctx, &trade); err != nil {
-				if ctx.Err() == context.Canceled {
-					log.Println("ReadJSON loop canceled, shutting down.")
-				} else {
-					log.Printf("Error reading or decoding JSON: %v", err)
-				}
-				return
-			}
-
-			log.Printf(
-				"New Trade on %s: Price=%s, Quantity=%s, Time=%s",
-				trade.Symbol,
-				trade.Price,
-				trade.Quantity,
-				time.UnixMilli(trade.TradeTime).Format(time.RFC3339),
-			)
-		}
-	}()
+	go handleMessages(ctx, client)
 
 	log.Println("Application started. Press Ctrl+C to exit.")
 	<-ctx.Done()
 
-	log.Println("Shutting down gracefully...")
 	if err := client.Close(); err != nil {
 		log.Printf("Error closing websocket connection: %v", err)
 	}
 	log.Println("Connection closed.")
+}
+
+func handleMessages(ctx context.Context, client *coder.Client) {
+	for {
+		var trade Trade
+		typ, bytes, err := client.Read(ctx, &trade)
+		if err != nil {
+			if ctx.Err() == context.Canceled {
+				log.Println("Read loop canceled, shutting down.")
+			} else {
+				log.Printf("Error reading or decoding JSON: %v", err)
+			}
+			return
+		}
+		if typ != gows.MessageText {
+			log.Printf("Received non-text message: %v", typ)
+			continue
+		}
+
+		log.Printf(
+			"New Trade on %s: Price=%s, Quantity=%s, IsMaker=%t",
+			trade.Symbol,
+			trade.Price,
+			trade.Quantity,
+			trade.IsMaker,
+		)
+
+		log.Printf("Raw message: %s", bytes)
+	}
 }
