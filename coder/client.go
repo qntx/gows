@@ -52,6 +52,7 @@ func New(cfg Config) *Client {
 	if cfg.URL == "" {
 		panic("URL is required")
 	}
+
 	if cfg.Context == nil {
 		cfg.Context = context.Background()
 	}

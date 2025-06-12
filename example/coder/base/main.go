@@ -28,8 +28,10 @@ func main() {
 	defer stop()
 
 	client := coder.New(coder.Config{
-		Context: ctx,
-		URL:     "wss://stream.binance.com:9443/ws/btcusdt@trade",
+		Context:   ctx,
+		URL:       "wss://stream.binance.com:9443/ws/btcusdt@trade",
+		Heartbeat: time.Second * 15,
+		ReadLimit: 1024 * 1024,
 	})
 
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -38,34 +40,36 @@ func main() {
 	if err := client.Connect(c); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
+	defer client.Close()
 
 	go handleMessages(ctx, client)
 
-	log.Println("Application started. Press Ctrl+C to exit.")
 	<-ctx.Done()
-
-	if err := client.Close(); err != nil {
-		log.Printf("Error closing websocket connection: %v", err)
-	}
-	log.Println("Connection closed.")
+	log.Println("Shutting down...")
 }
 
 func handleMessages(ctx context.Context, client *coder.Client) {
 	for {
 		var trade Trade
-		typ, bytes, err := client.Read(ctx, &trade)
+
+		typ, p, err := client.Read(ctx, &trade)
 		if err != nil {
 			if ctx.Err() == context.Canceled {
 				log.Println("Read loop canceled, shutting down.")
 			} else {
 				log.Printf("Error reading or decoding JSON: %v", err)
 			}
+
 			return
 		}
+
 		if typ != gows.MessageText {
 			log.Printf("Received non-text message: %v", typ)
+
 			continue
 		}
+
+		log.Printf("Raw message: %s", p)
 
 		log.Printf(
 			"New Trade on %s: Price=%s, Quantity=%s, IsMaker=%t",
@@ -74,7 +78,5 @@ func handleMessages(ctx context.Context, client *coder.Client) {
 			trade.Quantity,
 			trade.IsMaker,
 		)
-
-		log.Printf("Raw message: %s", bytes)
 	}
 }
