@@ -5,6 +5,7 @@ package coder
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
 	"github.com/qntx/gows"
 )
