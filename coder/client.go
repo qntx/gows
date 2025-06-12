@@ -57,8 +57,12 @@ func New(cfg Config) *Client {
 		cfg.Context = context.Background()
 	}
 
+	ctx, cancel := context.WithCancel(cfg.Context)
+
 	return &Client{
-		cfg: cfg,
+		cfg:    cfg,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
@@ -71,23 +75,21 @@ func (c *Client) Connect(ctx context.Context) error {
 		return ErrAlreadyConnected
 	}
 
-	conn, httpResp, err := websocket.Dial(ctx, c.cfg.URL, c.cfg.DialOptions)
+	var err error
+	c.conn, c.httpResp, err = websocket.Dial(ctx, c.cfg.URL, c.cfg.DialOptions)
 	if err != nil {
 		return fmt.Errorf("failed to dial websocket: %w", err)
 	}
 
 	if c.cfg.ReadLimit > 0 {
-		conn.SetReadLimit(c.cfg.ReadLimit)
+		c.conn.SetReadLimit(c.cfg.ReadLimit)
 	}
-
-	c.ctx, c.cancel = context.WithCancel(c.cfg.Context)
-	c.conn = conn
-	c.httpResp = httpResp
-	c.isConnected = true
 
 	if c.cfg.Heartbeat > 0 {
 		go c.heartbeat(c.ctx)
 	}
+
+	c.isConnected = true
 
 	return nil
 }
