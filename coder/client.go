@@ -18,8 +18,19 @@ import (
 )
 
 var (
-	ErrNotConnected     = errors.New("websocket client is not connected")
-	ErrAlreadyConnected = errors.New("websocket client is already connected")
+	// Errors - Connection
+	ErrNotConnected     = errors.New("gows/coder: websocket client is not connected")
+	ErrAlreadyConnected = errors.New("gows/coder: websocket client is already connected")
+	ErrNotListening     = errors.New("gows/coder: websocket client is not listening")
+	ErrAlreadyListening = errors.New("gows/coder: websocket client is already listening")
+
+	// Errors - Callbacks
+	ErrNoOnConnect = errors.New("gows/coder: OnConnect callback is not configured")
+	ErrNoOnClose   = errors.New("gows/coder: OnClose callback is not configured")
+	ErrNoOnMessage = errors.New("gows/coder: OnMessage callback is not configured")
+
+	// Errors - Events
+	ErrInvalidEventType = errors.New("gows/coder: invalid event type")
 )
 
 // Config holds the configuration for the client.
@@ -29,6 +40,11 @@ type Config struct {
 	Heartbeat   time.Duration
 	ReadLimit   int64
 	DialOptions *websocket.DialOptions
+
+	AutoListening bool // Automatically start listening for messages after connection
+	OnConnect     func()
+	OnClose       func()
+	OnMessage     func(gows.MessageType, []byte)
 }
 
 var _ gows.Client = (*Client)(nil)
@@ -42,6 +58,7 @@ type Client struct {
 	conn        *websocket.Conn
 	httpResp    *http.Response
 	isConnected bool
+	isListening bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -91,6 +108,17 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	c.isConnected = true
 
+	// Call OnConnect callback asynchronously to avoid blocking
+	if c.cfg.OnConnect != nil {
+		c.safeCallback(c.cfg.OnConnect)
+	}
+
+	// Automatically start listening for messages if configured and OnMessage callback is set
+	if c.cfg.AutoListening && c.cfg.OnMessage != nil {
+		c.isListening = true
+		go c.messageListener(c.ctx)
+	}
+
 	return nil
 }
 
@@ -112,6 +140,11 @@ func (c *Client) Close() error {
 
 	err := c.conn.Close(websocket.StatusNormalClosure, "closing connection")
 	c.conn = nil
+
+	// Call OnClose callback asynchronously to avoid blocking
+	if c.cfg.OnClose != nil {
+		c.safeCallback(c.cfg.OnClose)
+	}
 
 	return err
 }
@@ -191,6 +224,121 @@ func (c *Client) HandshakeResponse() *http.Response {
 	return c.httpResp
 }
 
+// StartListening starts a background goroutine that continuously listens for incoming messages
+// and calls the OnMessage callback for each received message.
+// This method should be called after Connect() and will return an error if not connected.
+// Only one listening goroutine can be active at a time.
+func (c *Client) StartListening() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.isConnected {
+		return ErrNotConnected
+	}
+
+	if c.isListening {
+		return ErrAlreadyListening
+	}
+
+	if c.cfg.OnMessage == nil {
+		return ErrNoOnMessage
+	}
+
+	c.isListening = true
+
+	go c.messageListener(c.ctx)
+
+	return nil
+}
+
+// StopListening stops the background message listening goroutine.
+func (c *Client) StopListening() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.isListening = false
+}
+
+// IsListening returns whether the client is currently listening for messages.
+func (c *Client) IsListening() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.isListening
+}
+
+// On registers a callback function for the specified event type.
+// This allows dynamic configuration of event handlers after client creation.
+// Supported event types: EventConnect, EventClose, EventMessage
+func (c *Client) On(eventType gows.EventType, callback any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	switch eventType {
+	case gows.EventConnect:
+		if cb, ok := callback.(func()); ok {
+			c.cfg.OnConnect = cb
+		} else {
+			return ErrInvalidEventType
+		}
+	case gows.EventClose:
+		if cb, ok := callback.(func()); ok {
+			c.cfg.OnClose = cb
+		} else {
+			return ErrInvalidEventType
+		}
+	case gows.EventMessage:
+		if cb, ok := callback.(func(gows.MessageType, []byte)); ok {
+			c.cfg.OnMessage = cb
+		} else {
+			return ErrInvalidEventType
+		}
+	default:
+		return ErrInvalidEventType
+	}
+
+	return nil
+}
+
+// messageListener continuously reads incoming messages and calls the OnMessage callback.
+func (c *Client) messageListener(ctx context.Context) {
+	defer func() {
+		c.mu.Lock()
+		c.isListening = false
+		c.mu.Unlock()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		// Check if we should continue listening
+		c.mu.Lock()
+		if !c.isListening || !c.isConnected {
+			c.mu.Unlock()
+			return
+		}
+		conn := c.conn
+		c.mu.Unlock()
+
+		if conn == nil {
+			return
+		}
+
+		typ, p, err := conn.Read(ctx)
+		if err != nil {
+			// Connection error, stop listening
+			return
+		}
+
+		// Call OnMessage callback safely
+		c.safeCallbackWithMessage(c.cfg.OnMessage, gows.MessageType(typ), p)
+	}
+}
+
 // getConn safely retrieves the current connection object.
 func (c *Client) getConn() (*websocket.Conn, error) {
 	c.mu.Lock()
@@ -221,5 +369,35 @@ func (c *Client) heartbeat(ctx context.Context) {
 		}
 
 		t.Reset(c.cfg.Heartbeat)
+	}
+}
+
+// safeCallback calls the callback function asynchronously to avoid blocking.
+func (c *Client) safeCallback(cb func()) {
+	if cb != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log the panic but don't crash the client
+					// In a production environment, you might want to use a proper logger
+				}
+			}()
+			cb()
+		}()
+	}
+}
+
+// safeCallbackWithMessage calls the callback function asynchronously to avoid blocking.
+func (c *Client) safeCallbackWithMessage(cb func(gows.MessageType, []byte), typ gows.MessageType, p []byte) {
+	if cb != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log the panic but don't crash the client
+					// In a production environment, you might want to use a proper logger
+				}
+			}()
+			cb(typ, p)
+		}()
 	}
 }

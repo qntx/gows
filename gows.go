@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
+// MessageType represents the type of message for callback registration
 type MessageType int
 
 const (
@@ -11,6 +12,18 @@ const (
 	MessageText MessageType = iota + 1
 	// MessageBinary is for binary messages like protobufs.
 	MessageBinary
+)
+
+// EventType represents the type of event for callback registration
+type EventType int
+
+const (
+	// EventConnect is triggered when the WebSocket connection is established
+	EventConnect EventType = iota
+	// EventClose is triggered when the WebSocket connection is closed
+	EventClose
+	// EventMessage is triggered when a message is received
+	EventMessage
 )
 
 type Client interface {
@@ -35,4 +48,9 @@ type Client interface {
 	// `p` is the byte slice containing the message payload.
 	// Returns an error if the write operation fails or the connection is closed.
 	Write(ctx context.Context, typ MessageType, p []byte) error
+
+	// On registers a callback function for the specified event type.
+	// This allows dynamic configuration of event handlers after client creation.
+	// Supported event types: EventConnect, EventClose, EventMessage
+	On(eventType EventType, callback any) error
 }

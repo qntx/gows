@@ -28,9 +28,9 @@ func main() {
 	defer stop()
 
 	client := coder.New(coder.Config{
-		Context:   ctx,
-		URL:       "wss://stream.binance.com:9443/ws/btcusdt@trade",
-		Heartbeat: time.Second * 15,
+		Context: ctx,
+		URL:     "wss://stream.binance.com:9443/ws/btcusdt@trade",
+		// Heartbeat: time.Second * 15,
 		ReadLimit: 1024 * 1024,
 	})
 
