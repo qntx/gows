@@ -13,8 +13,8 @@ import (
 
 func main() {
 	client := coder.New(coder.Config{
-		URL:           "wss://echo.websocket.org",
-		AutoListening: true,
+		URL:       "wss://echo.websocket.org",
+		Listening: true,
 	})
 
 	client.On(gows.EventConnect, func() {

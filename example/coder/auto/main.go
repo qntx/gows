@@ -1,8 +1,8 @@
-// Example demonstrating the use of AutoListening configuration
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -11,54 +11,77 @@ import (
 	"github.com/qntx/gows/coder"
 )
 
+type UserMessage struct {
+	User    string `json:"user"`
+	Content string `json:"content"`
+}
+
 func main() {
-	cfg := coder.Config{
-		URL:           "wss://echo.websocket.org",
-		AutoListening: true, // Automatically start listening after connection
+	msgChan := make(chan UserMessage, 10)
+	errChan := make(chan error, 10)
+
+	client := coder.New(coder.Config{
+		URL:       "wss://echo.websocket.org",
+		Listening: true,
 		OnConnect: func() {
-			fmt.Println("Connected and automatically started listening!")
+			fmt.Println("🔗 Connected to wss://echo.websocket.org!")
 		},
-		OnClose: func() {
-			fmt.Println("Disconnected from WebSocket server!")
-		},
-		OnMessage: func(msgType gows.MessageType, data []byte) {
-			fmt.Printf("Auto-received message [%v]: %s\n", msgType, string(data))
-		},
-	}
+	})
 
-	client := coder.New(cfg)
+	client.On(gows.EventMessage, func(msgType gows.MessageType, data []byte) {
+		fmt.Printf("Received raw data: %s\n", string(data))
 
-	// Connect to the server - listening will start automatically
-	ctx := context.Background()
-	if err := client.Connect(ctx); err != nil {
-		log.Fatal("Failed to connect:", err)
+		if msgType != gows.MessageText {
+			return
+		}
+
+		var msg UserMessage
+		if err := json.Unmarshal(data, &msg); err != nil {
+			errChan <- err
+			return
+		}
+
+		msgChan <- msg
+	})
+
+	if err := client.Connect(context.Background()); err != nil {
+		log.Fatalf("Failed to connect: %v", err)
 	}
 	defer client.Close()
 
-	// Verify listening is active
-	if client.IsListening() {
-		fmt.Println("✅ Client is automatically listening for messages")
-	} else {
-		fmt.Println("❌ Client is not listening")
-	}
+	go func() {
+		time.Sleep(2 * time.Second)
 
-	// Send some test messages
-	messages := []string{
-		"Auto listening test message 1",
-		"Auto listening test message 2",
-		"Auto listening test message 3",
-	}
-
-	for _, msg := range messages {
-		if err := client.Write(ctx, gows.MessageText, []byte(msg)); err != nil {
-			log.Printf("Failed to send message: %v", err)
-			continue
+		msgToSend := UserMessage{
+			User:    "Gemini",
+			Content: "Hello, this is a test message!",
 		}
-		time.Sleep(1 * time.Second)
-	}
 
-	// Wait for responses
-	time.Sleep(2 * time.Second)
+		jsonData, err := json.Marshal(msgToSend)
+		if err != nil {
+			return
+		}
 
-	fmt.Println("Auto-start listening example completed!")
+		fmt.Printf("🚀 Sending JSON data: %s\n", string(jsonData))
+		if err := client.Write(context.Background(), gows.MessageText, jsonData); err != nil {
+			log.Printf("Error writing message: %v", err)
+		}
+	}()
+
+	go func() {
+		fmt.Println("--- Starting event processing loop. Waiting for messages... ---")
+		for {
+			select {
+			case msg := <-msgChan:
+				fmt.Printf("✅ [APP LOGIC] Successfully processed message from user '%s' with content: '%s'\n", msg.User, msg.Content)
+			case err := <-errChan:
+				fmt.Printf("🚨 [APP LOGIC] An error occurred: %v\n", err)
+			case <-time.After(10 * time.Second):
+				fmt.Println("Timeout: No message received after 10 seconds.")
+			}
+		}
+	}()
+
+	time.Sleep(5 * time.Second)
+	fmt.Println("--- Example finished. ---")
 }

@@ -24,13 +24,13 @@ var (
 	ErrNotListening     = errors.New("gows/coder: websocket client is not listening")
 	ErrAlreadyListening = errors.New("gows/coder: websocket client is already listening")
 
+	// Errors - Events
+	ErrInvalidEventType = errors.New("gows/coder: invalid event type")
+
 	// Errors - Callbacks
 	ErrNoOnConnect = errors.New("gows/coder: OnConnect callback is not configured")
 	ErrNoOnClose   = errors.New("gows/coder: OnClose callback is not configured")
 	ErrNoOnMessage = errors.New("gows/coder: OnMessage callback is not configured")
-
-	// Errors - Events
-	ErrInvalidEventType = errors.New("gows/coder: invalid event type")
 )
 
 // Config holds the configuration for the client.
@@ -41,10 +41,10 @@ type Config struct {
 	ReadLimit   int64
 	DialOptions *websocket.DialOptions
 
-	AutoListening bool // Automatically start listening for messages after connection
-	OnConnect     func()
-	OnClose       func()
-	OnMessage     func(gows.MessageType, []byte)
+	Listening bool // Automatically start listening for messages after connection
+	OnConnect func()
+	OnClose   func()
+	OnMessage func(gows.MessageType, []byte)
 }
 
 var _ gows.Client = (*Client)(nil)
@@ -114,7 +114,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	// Automatically start listening for messages if configured and OnMessage callback is set
-	if c.cfg.AutoListening && c.cfg.OnMessage != nil {
+	if c.cfg.Listening && c.cfg.OnMessage != nil {
 		c.isListening = true
 		go c.messageListener(c.ctx)
 	}
