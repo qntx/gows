@@ -24,6 +24,8 @@ const (
 	EventClose
 	// EventMessage is triggered when a message is received
 	EventMessage
+	// EventError is triggered when an error occurs
+	EventError
 )
 
 type Client interface {
@@ -51,6 +53,6 @@ type Client interface {
 
 	// On registers a callback function for the specified event type.
 	// This allows dynamic configuration of event handlers after client creation.
-	// Supported event types: EventConnect, EventClose, EventMessage
+	// Supported event types: EventConnect, EventClose, EventMessage, EventError
 	On(eventType EventType, callback any) error
 }

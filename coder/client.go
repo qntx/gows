@@ -31,6 +31,7 @@ var (
 	ErrNoOnConnect = errors.New("gows/coder: OnConnect callback is not configured")
 	ErrNoOnClose   = errors.New("gows/coder: OnClose callback is not configured")
 	ErrNoOnMessage = errors.New("gows/coder: OnMessage callback is not configured")
+	ErrNoOnError   = errors.New("gows/coder: OnError callback is not configured")
 )
 
 // Config holds the configuration for the client.
@@ -45,6 +46,7 @@ type Config struct {
 	OnConnect func()
 	OnClose   func()
 	OnMessage func(gows.MessageType, []byte)
+	OnError   func(error)
 }
 
 var _ gows.Client = (*Client)(nil)
@@ -269,7 +271,7 @@ func (c *Client) IsListening() bool {
 
 // On registers a callback function for the specified event type.
 // This allows dynamic configuration of event handlers after client creation.
-// Supported event types: EventConnect, EventClose, EventMessage
+// Supported event types: EventConnect, EventClose, EventMessage, EventError
 func (c *Client) On(eventType gows.EventType, callback any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -290,6 +292,12 @@ func (c *Client) On(eventType gows.EventType, callback any) error {
 	case gows.EventMessage:
 		if cb, ok := callback.(func(gows.MessageType, []byte)); ok {
 			c.cfg.OnMessage = cb
+		} else {
+			return ErrInvalidEventType
+		}
+	case gows.EventError:
+		if cb, ok := callback.(func(error)); ok {
+			c.cfg.OnError = cb
 		} else {
 			return ErrInvalidEventType
 		}
@@ -330,7 +338,8 @@ func (c *Client) messageListener(ctx context.Context) {
 
 		typ, p, err := conn.Read(ctx)
 		if err != nil {
-			// Connection error, stop listening
+			// Connection error, stop listening and notify user
+			c.safeCallbackWithError(c.cfg.OnError, err)
 			return
 		}
 
@@ -365,6 +374,7 @@ func (c *Client) heartbeat(ctx context.Context) {
 
 		err := c.conn.Ping(ctx)
 		if err != nil {
+			c.safeCallbackWithError(c.cfg.OnError, err)
 			return
 		}
 
@@ -383,6 +393,21 @@ func (c *Client) safeCallback(cb func()) {
 				}
 			}()
 			cb()
+		}()
+	}
+}
+
+// safeCallbackWithError calls the error callback function asynchronously.
+func (c *Client) safeCallbackWithError(cb func(error), err error) {
+	if cb != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log the panic but don't crash the client
+					// In a production environment, you might want to use a proper logger
+				}
+			}()
+			cb(err)
 		}()
 	}
 }
