@@ -38,6 +38,7 @@ func main() {
 		var msg UserMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			errChan <- err
+
 			return
 		}
 
@@ -63,6 +64,7 @@ func main() {
 		}
 
 		fmt.Printf("🚀 Sending JSON data: %s\n", string(jsonData))
+
 		if err := client.Write(context.Background(), gows.MessageText, jsonData); err != nil {
 			log.Printf("Error writing message: %v", err)
 		}
@@ -70,6 +72,7 @@ func main() {
 
 	go func() {
 		fmt.Println("--- Starting event processing loop. Waiting for messages... ---")
+
 		for {
 			select {
 			case msg := <-msgChan:

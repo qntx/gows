@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// MessageType represents the type of message for callback registration
+// MessageType represents the type of message for callback registration.
 type MessageType int
 
 const (
@@ -14,17 +14,17 @@ const (
 	MessageBinary
 )
 
-// EventType represents the type of event for callback registration
+// EventType represents the type of event for callback registration.
 type EventType int
 
 const (
-	// EventConnect is triggered when the WebSocket connection is established
+	// EventConnect is triggered when the WebSocket connection is established.
 	EventConnect EventType = iota
-	// EventClose is triggered when the WebSocket connection is closed
+	// EventClose is triggered when the WebSocket connection is closed.
 	EventClose
-	// EventMessage is triggered when a message is received
+	// EventMessage is triggered when a message is received.
 	EventMessage
-	// EventError is triggered when an error occurs
+	// EventError is triggered when an error occurs.
 	EventError
 )
 

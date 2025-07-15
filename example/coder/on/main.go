@@ -33,6 +33,7 @@ func main() {
 	if err := client.Connect(ctx); err != nil {
 		log.Fatal("Failed to connect:", err)
 	}
+
 	defer client.Close()
 
 	// Verify listening is active
@@ -56,6 +57,7 @@ func main() {
 	for _, msg := range messages {
 		if err := client.Write(ctx, gows.MessageText, []byte(msg)); err != nil {
 			log.Printf("Failed to send message: %v", err)
+
 			continue
 		}
 

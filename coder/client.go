@@ -18,16 +18,16 @@ import (
 )
 
 var (
-	// Errors - Connection
+	// Errors - Connection.
 	ErrNotConnected     = errors.New("gows/coder: websocket client is not connected")
 	ErrAlreadyConnected = errors.New("gows/coder: websocket client is already connected")
 	ErrNotListening     = errors.New("gows/coder: websocket client is not listening")
 	ErrAlreadyListening = errors.New("gows/coder: websocket client is already listening")
 
-	// Errors - Events
+	// Errors - Events.
 	ErrInvalidEventType = errors.New("gows/coder: invalid event type")
 
-	// Errors - Callbacks
+	// Errors - Callbacks.
 	ErrNoOnConnect = errors.New("gows/coder: OnConnect callback is not configured")
 	ErrNoOnClose   = errors.New("gows/coder: OnClose callback is not configured")
 	ErrNoOnMessage = errors.New("gows/coder: OnMessage callback is not configured")
@@ -95,6 +95,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	var err error
+
 	c.conn, c.httpResp, err = websocket.Dial(ctx, c.cfg.URL, c.cfg.DialOptions)
 	if err != nil {
 		return fmt.Errorf("failed to dial websocket: %w", err)
@@ -269,9 +270,7 @@ func (c *Client) IsListening() bool {
 	return c.isListening
 }
 
-// On registers a callback function for the specified event type.
-// This allows dynamic configuration of event handlers after client creation.
-// Supported event types: EventConnect, EventClose, EventMessage, EventError
+// Supported event types: EventConnect, EventClose, EventMessage, EventError.
 func (c *Client) On(eventType gows.EventType, callback any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -327,8 +326,10 @@ func (c *Client) messageListener(ctx context.Context) {
 		c.mu.Lock()
 		if !c.isListening || !c.isConnected {
 			c.mu.Unlock()
+
 			return
 		}
+
 		conn := c.conn
 		c.mu.Unlock()
 
@@ -340,6 +341,7 @@ func (c *Client) messageListener(ctx context.Context) {
 		if err != nil {
 			// Connection error, stop listening and notify user
 			c.safeCallbackWithError(c.cfg.OnError, err)
+
 			return
 		}
 
@@ -375,6 +377,7 @@ func (c *Client) heartbeat(ctx context.Context) {
 		err := c.conn.Ping(ctx)
 		if err != nil {
 			c.safeCallbackWithError(c.cfg.OnError, err)
+
 			return
 		}
 
