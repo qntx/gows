@@ -27,7 +27,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	client := coder.New(coder.Config{
+	client := coder.New(&coder.Config{
 		Context: ctx,
 		URL:     "wss://stream.binance.com:9443/ws/btcusdt@trade",
 		// Heartbeat: time.Second * 15,

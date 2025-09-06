@@ -39,7 +39,7 @@ var _ gows.Client = (*Client)(nil)
 // Client is a thread-safe WebSocket client wrapper for coder/websocket.
 // It allows for one concurrent reader and multiple concurrent writers.
 type Client struct {
-	cfg Config
+	cfg *Config
 
 	mu          sync.Mutex
 	conn        *websocket.Conn
@@ -52,7 +52,7 @@ type Client struct {
 }
 
 // New creates a new WebSocket client.
-func New(cfg Config) *Client {
+func New(cfg *Config) *Client {
 	if cfg.URL == "" {
 		panic("URL is required")
 	}

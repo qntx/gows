@@ -20,7 +20,7 @@ func main() {
 	msgChan := make(chan UserMessage, 10)
 	errChan := make(chan error, 10)
 
-	client := coder.New(coder.Config{
+	client := coder.New(&coder.Config{
 		URL:       "wss://echo.websocket.org",
 		Listening: true,
 		OnConnect: func() {

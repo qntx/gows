@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	client := coder.New(coder.Config{
+	client := coder.New(&coder.Config{
 		URL:       "wss://echo.websocket.org",
 		Listening: true,
 	})
