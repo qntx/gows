@@ -92,8 +92,8 @@ func (c *Config) WithOnError(callback func(error)) *Config {
 	return c
 }
 
-func (c *Config) Clone() Config {
-	return Config{
+func (c *Config) Clone() *Config {
+	return &Config{
 		Context:     c.Context,
 		URL:         c.URL,
 		Heartbeat:   c.Heartbeat,
