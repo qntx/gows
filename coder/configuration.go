@@ -23,12 +23,12 @@ type Config struct {
 	OnError   func(error)
 }
 
-func NewConfig() Config {
-	return Config{}
+func NewConfig() *Config {
+	return &Config{}
 }
 
-func DefaultConfig() Config {
-	return Config{
+func DefaultConfig() *Config {
+	return &Config{
 		Context:     context.Background(),
 		URL:         "", // Must be set by caller
 		Heartbeat:   30 * time.Second,
