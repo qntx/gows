@@ -34,21 +34,6 @@ var (
 	ErrNoOnError   = errors.New("gows/coder: OnError callback is not configured")
 )
 
-// Config holds the configuration for the client.
-type Config struct {
-	Context     context.Context
-	URL         string
-	Heartbeat   time.Duration
-	ReadLimit   int64
-	DialOptions *websocket.DialOptions
-
-	Listening bool // Automatically start listening for messages after connection
-	OnConnect func()
-	OnClose   func()
-	OnMessage func(gows.MessageType, []byte)
-	OnError   func(error)
-}
-
 var _ gows.Client = (*Client)(nil)
 
 // Client is a thread-safe WebSocket client wrapper for coder/websocket.
