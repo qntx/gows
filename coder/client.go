@@ -41,7 +41,7 @@ var _ gows.Client = (*Client)(nil)
 type Client struct {
 	cfg *Config
 
-	mu          sync.Mutex
+	mu          sync.RWMutex
 	conn        *websocket.Conn
 	httpResp    *http.Response
 	isConnected bool
@@ -206,8 +206,8 @@ func (c *Client) Writer(ctx context.Context, typ gows.MessageType) (io.WriteClos
 // It can be useful for inspecting headers, cookies, or the status code.
 // The response is nil if the client has not connected yet.
 func (c *Client) HandshakeResponse() *http.Response {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return c.httpResp
 }
@@ -249,8 +249,8 @@ func (c *Client) StopListening() {
 
 // IsListening returns whether the client is currently listening for messages.
 func (c *Client) IsListening() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return c.isListening
 }
@@ -308,15 +308,13 @@ func (c *Client) messageListener(ctx context.Context) {
 		}
 
 		// Check if we should continue listening
-		c.mu.Lock()
+		c.mu.RLock()
 		if !c.isListening || !c.isConnected {
-			c.mu.Unlock()
-
+			c.mu.RUnlock()
 			return
 		}
-
 		conn := c.conn
-		c.mu.Unlock()
+		c.mu.RUnlock()
 
 		if conn == nil {
 			return
@@ -337,8 +335,8 @@ func (c *Client) messageListener(ctx context.Context) {
 
 // getConn safely retrieves the current connection object.
 func (c *Client) getConn() (*websocket.Conn, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	if !c.isConnected {
 		return nil, ErrNotConnected
@@ -359,7 +357,12 @@ func (c *Client) heartbeat(ctx context.Context) {
 		case <-t.C:
 		}
 
-		err := c.conn.Ping(ctx)
+		conn, err := c.getConn()
+		if err != nil {
+			return
+		}
+
+		err = conn.Ping(ctx)
 		if err != nil {
 			c.safeCallbackWithError(c.cfg.OnError, err)
 
@@ -376,8 +379,7 @@ func (c *Client) safeCallback(cb func()) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					// Log the panic but don't crash the client
-					// In a production environment, you might want to use a proper logger
+					c.cfg.Logger.Errorf("Panic in callback: %v", r)
 				}
 			}()
 			cb()
@@ -391,8 +393,7 @@ func (c *Client) safeCallbackWithError(cb func(error), err error) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					// Log the panic but don't crash the client
-					// In a production environment, you might want to use a proper logger
+					c.cfg.Logger.Errorf("Panic in callback: %v", r)
 				}
 			}()
 			cb(err)
@@ -406,8 +407,7 @@ func (c *Client) safeCallbackWithMessage(cb func(gows.MessageType, []byte), typ 
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					// Log the panic but don't crash the client
-					// In a production environment, you might want to use a proper logger
+					c.cfg.Logger.Errorf("Panic in callback: %v", r)
 				}
 			}()
 			cb(typ, p)

@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/qntx/golog"
+	"github.com/qntx/golog/zerolog"
 	"github.com/qntx/gows"
 )
 
@@ -21,6 +23,8 @@ type Config struct {
 	OnClose   func()
 	OnMessage func(gows.MessageType, []byte)
 	OnError   func(error)
+
+	Logger golog.Logger
 }
 
 func NewConfig() *Config {
@@ -39,6 +43,7 @@ func DefaultConfig() *Config {
 		OnClose:     nil,
 		OnMessage:   nil,
 		OnError:     nil,
+		Logger:      zerolog.New(),
 	}
 }
 
@@ -92,6 +97,11 @@ func (c *Config) WithOnError(callback func(error)) *Config {
 	return c
 }
 
+func (c *Config) WithLogger(logger golog.Logger) *Config {
+	c.Logger = logger
+	return c
+}
+
 func (c *Config) Clone() *Config {
 	return &Config{
 		Context:     c.Context,
@@ -104,5 +114,6 @@ func (c *Config) Clone() *Config {
 		OnClose:     c.OnClose,
 		OnMessage:   c.OnMessage,
 		OnError:     c.OnError,
+		Logger:      c.Logger,
 	}
 }
