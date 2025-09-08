@@ -3,7 +3,7 @@ module github.com/qntx/gows
 go 1.23.8
 
 require (
-	github.com/coder/websocket v1.8.13
+	github.com/coder/websocket v1.8.14
 	github.com/qntx/golog v0.2.0
 )
 
